@@ -5,46 +5,21 @@ import time
 import serial
 from datetime import datetime
 from collections import deque
+from config import *
 
 from PyQt5 import QtWidgets, QtCore
 import pyqtgraph as pg
 
-
-# ---------------- USER CONFIG ------------------
-
-PORT = "COM4"
-BAUD = 115200
-
-EXPERIMENT_TYPE = "HotWater"
-SENSOR_COUNT = 8
-ROOT_LOG_DIR = "DataLog"
-
-HISTORY_SECONDS = 60
-POLL_INTERVAL_MS = 100
-VIEW_MODE_DEFAULT = "merged"
-
-TEMP_UNIT = "C"
-
-PLOT_LAYOUT = {
-    "split2": {
-        "left":  [0, 1, 2, 3],
-        "right": [4, 5, 6, 7],
-    }
-}
-
-CURVE_COLORS = {
-    "hot0":  (255, 0, 0),       "cold0": (150, 0, 0),
-    "hot1":  (0, 200, 0),       "cold1": (0, 100, 0),
-    "hot2":  (0, 0, 255),       "cold2": (0, 0, 150),
-    "hot3":  (255, 165, 0),     "cold3": (180, 110, 0),
-    "hot4":  (128, 0, 128),     "cold4": (90, 0, 90),
-    "hot5":  (0, 128, 128),     "cold5": (0, 90, 90),
-    "hot6":  (128, 128, 0),     "cold6": (90, 90, 0),
-    "hot7":  (255, 20, 147),    "cold7": (180, 10, 100),
-}
-
+# ---------------- ARDUINO HELPERS ------------------
 
 def wait_for_ready(ser):
+    """Waits for the Arduino to send a 'READY' signal before proceeding.
+    
+    Continuously reads lines from the serial connection until the 'READY' message is received.
+    
+    Args:
+        ser: The serial connection to the Arduino.
+    """
     print("Waiting for Arduino READY signal...")
     while True:
         line = ser.readline().decode(errors="ignore").strip()
@@ -59,6 +34,8 @@ def parse_csv(line):
     except ValueError:
         return None
 
+
+# ---------------- LOGGING HELPERS ------------------
 
 def build_output_path():
     now = datetime.now()
@@ -78,6 +55,11 @@ def build_output_path():
 # ---------------- MAIN GUI CLASS ------------------
 
 class SerialPlotter(QtWidgets.QMainWindow):
+    """Main GUI application for real-time thermocouple data logging and plotting.
+
+    Provides a PyQt5-based interface to visualize, log, and interact with temperature data from an Arduino device.
+    Supports live plotting, CSV logging, unit switching, and manual axis scaling.
+    """
     def __init__(self, port, baud, parent=None):
         super().__init__(parent)
 
@@ -106,7 +88,7 @@ class SerialPlotter(QtWidgets.QMainWindow):
         self.csvwriter = csv.writer(self.csvfile)
         self.write_header()
 
-        # Build UI (now matches test_main.py)
+        # Build UI
         self.init_ui()
 
         # Serial polling timer
@@ -129,11 +111,14 @@ class SerialPlotter(QtWidgets.QMainWindow):
     def write_header(self):
         header = ["time_since_start", "datetime"]
         for i in range(SENSOR_COUNT):
-            header.extend((f"hot{i}", f"cold{i}"))
+            header.extend((
+                f"{SENSOR_NAMES[i]}_{HOT_LABEL}",
+                f"{SENSOR_NAMES[i]}_{COLD_LABEL}",
+            ))
         self.csvwriter.writerow(header)
         self.csvfile.flush()
 
-    # ---------- UI Setup----------
+    # ---------- UI Setup ----------
 
     def init_ui(self):
         self.setWindowTitle("Thermocouple Logger (Arduino)")
@@ -177,7 +162,7 @@ class SerialPlotter(QtWidgets.QMainWindow):
 
         for i in range(SENSOR_COUNT):
             label = QtWidgets.QLabel(
-                f"Sensor {i}:  HOT 0000.00 °C   COLD 0000.00 °C"
+                f"{SENSOR_NAMES[i]}:  {HOT_LABEL} 0000.00 °C   {COLD_LABEL} 0000.00 °C"
             )
             label.setStyleSheet("font-family: Consolas; font-size: 12pt;")
             label.setMinimumWidth(380)
@@ -192,17 +177,63 @@ class SerialPlotter(QtWidgets.QMainWindow):
         global_box = QtWidgets.QGroupBox("Global Visibility")
         gl = QtWidgets.QHBoxLayout(global_box)
 
-        self.cb_global_hot = QtWidgets.QCheckBox("Show All HOT")
+        self.cb_global_hot = QtWidgets.QCheckBox(f"Show All {HOT_LABEL}")
         self.cb_global_hot.setChecked(True)
         self.cb_global_hot.stateChanged.connect(self.toggle_all_hot)
 
-        self.cb_global_cold = QtWidgets.QCheckBox("Show All COLD")
+        self.cb_global_cold = QtWidgets.QCheckBox(f"Show All {COLD_LABEL}")
         self.cb_global_cold.setChecked(True)
         self.cb_global_cold.stateChanged.connect(self.toggle_all_cold)
 
         gl.addWidget(self.cb_global_hot)
         gl.addWidget(self.cb_global_cold)
         control_layout.addWidget(global_box)
+
+        # -------- AXIS SCALING PANEL ----------
+        axis_box = QtWidgets.QGroupBox("Manual Axis Scaling")
+        axis_layout = QtWidgets.QGridLayout(axis_box)
+
+        # X min/max
+        axis_layout.addWidget(QtWidgets.QLabel("X Min:"), 0, 0)
+        self.xmin_edit = QtWidgets.QLineEdit()
+        if AXIS_X_MIN is not None:
+            self.xmin_edit.setText(str(AXIS_X_MIN))
+        self.xmin_edit.setPlaceholderText("auto")
+        axis_layout.addWidget(self.xmin_edit, 0, 1)
+
+        axis_layout.addWidget(QtWidgets.QLabel("X Max:"), 0, 2)
+        self.xmax_edit = QtWidgets.QLineEdit()
+        if AXIS_X_MAX is not None:
+            self.xmax_edit.setText(str(AXIS_X_MAX))
+        self.xmax_edit.setPlaceholderText("auto")
+        axis_layout.addWidget(self.xmax_edit, 0, 3)
+
+        # Y min/max
+        axis_layout.addWidget(QtWidgets.QLabel("Y Min:"), 1, 0)
+        self.ymin_edit = QtWidgets.QLineEdit()
+        if AXIS_Y_MIN is not None:
+            self.ymin_edit.setText(str(AXIS_Y_MIN))
+        self.ymin_edit.setPlaceholderText("auto")
+        axis_layout.addWidget(self.ymin_edit, 1, 1)
+
+        axis_layout.addWidget(QtWidgets.QLabel("Y Max:"), 1, 2)
+        self.ymax_edit = QtWidgets.QLineEdit()
+        if AXIS_Y_MAX is not None:
+            self.ymax_edit.setText(str(AXIS_Y_MAX))
+        self.ymax_edit.setPlaceholderText("auto")
+        axis_layout.addWidget(self.ymax_edit, 1, 3)
+
+        # Buttons
+        apply_btn = QtWidgets.QPushButton("Apply Scaling")
+        apply_btn.clicked.connect(self.apply_manual_scaling)
+
+        auto_btn = QtWidgets.QPushButton("Auto Scale")
+        auto_btn.clicked.connect(self.reset_auto_scaling)
+
+        axis_layout.addWidget(apply_btn, 2, 0, 1, 2)
+        axis_layout.addWidget(auto_btn, 2, 2, 1, 2)
+
+        control_layout.addWidget(axis_box)
 
         # -------- VIEW MODE BUTTONS ----------
         btn_box = QtWidgets.QHBoxLayout()
@@ -221,18 +252,18 @@ class SerialPlotter(QtWidgets.QMainWindow):
         self.checkboxes = {}
 
         for i in range(SENSOR_COUNT):
-            group = QtWidgets.QGroupBox(f"Sensor {i}")
+            group = QtWidgets.QGroupBox(f"{SENSOR_NAMES[i]}")
             hl = QtWidgets.QHBoxLayout(group)
 
             key_hot = f"hot{i}"
             key_cold = f"cold{i}"
 
-            cb_hot = QtWidgets.QCheckBox("Hot")
+            cb_hot = QtWidgets.QCheckBox(HOT_LABEL)
             cb_hot.setChecked(True)
             cb_hot.toggled.connect(lambda chk, k=key_hot: self.on_curve_toggled(k, chk))
             self.checkboxes[key_hot] = cb_hot
 
-            cb_cold = QtWidgets.QCheckBox("Cold")
+            cb_cold = QtWidgets.QCheckBox(COLD_LABEL)
             cb_cold.setChecked(True)
             cb_cold.toggled.connect(lambda chk, k=key_cold: self.on_curve_toggled(k, chk))
             self.checkboxes[key_cold] = cb_cold
@@ -270,8 +301,8 @@ class SerialPlotter(QtWidgets.QMainWindow):
             cold = self.convert_temp(self.curves_data[f"cold{i}"][-1])
 
             self.live_labels[f"row{i}"].setText(
-                f"Sensor {i}:  HOT {hot:7.2f} {self.unit_suffix()}   "
-                f"COLD {cold:7.2f} {self.unit_suffix()}"
+                f"{SENSOR_NAMES[i]}:  {HOT_LABEL} {hot:7.2f} {self.unit_suffix()}   "
+                f"{COLD_LABEL} {cold:7.2f} {self.unit_suffix()}"
             )
 
     # ---------- Plot Building ----------
@@ -291,6 +322,9 @@ class SerialPlotter(QtWidgets.QMainWindow):
         else:
             self.build_split2()
 
+        # After rebuilding plots, redraw any existing data
+        self.update_plot()
+
     def build_merged(self):
         p = pg.PlotWidget()
         p.addLegend()
@@ -304,7 +338,8 @@ class SerialPlotter(QtWidgets.QMainWindow):
             for kind in ("hot", "cold"):
                 key = f"{kind}{i}"
                 color = CURVE_COLORS[key]
-                curve = p.plot([], [], pen=pg.mkPen(color=color, width=2), name=key)
+                display_name = f"{SENSOR_NAMES[i]} {HOT_LABEL if kind == 'hot' else COLD_LABEL}"
+                curve = p.plot([], [], pen=pg.mkPen(color=color, width=2), name=display_name)
                 curve.setVisible(self.checkboxes[key].isChecked())
                 self.curves_plot[key] = curve
 
@@ -315,7 +350,7 @@ class SerialPlotter(QtWidgets.QMainWindow):
             for row_idx, sensor in enumerate(cfg[side]):
                 p = pg.PlotWidget()
                 p.addLegend()
-                p.setLabel("left", f"S{sensor} Temp ({self.unit_suffix()})")
+                p.setLabel("left", f"{SENSOR_NAMES[sensor]} Temp ({self.unit_suffix()})")
                 p.setLabel("bottom", "Time (s)")
 
                 self.plot_layout.addWidget(p, row_idx, col_idx)
@@ -324,7 +359,8 @@ class SerialPlotter(QtWidgets.QMainWindow):
                 for kind in ("hot", "cold"):
                     key = f"{kind}{sensor}"
                     color = CURVE_COLORS[key]
-                    curve = p.plot([], [], pen=pg.mkPen(color=color, width=2), name=key)
+                    display_name = f"{SENSOR_NAMES[sensor]} {HOT_LABEL if kind == 'hot' else COLD_LABEL}"
+                    curve = p.plot([], [], pen=pg.mkPen(color=color, width=2), name=display_name)
                     curve.setVisible(self.checkboxes[key].isChecked())
                     self.curves_plot[key] = curve
 
@@ -353,6 +389,44 @@ class SerialPlotter(QtWidgets.QMainWindow):
         for i in range(SENSOR_COUNT):
             key = f"cold{i}"
             self.checkboxes[key].setChecked(show)
+
+    # ---------- MANUAL AXIS CONTROL ----------
+
+    def apply_manual_scaling(self):
+        global AXIS_X_MIN, AXIS_X_MAX, AXIS_Y_MIN, AXIS_Y_MAX
+
+        def parse_value(text):
+            text = text.strip()
+            if not text:
+                return None
+            try:
+                return float(text)
+            except ValueError:
+                # Invalid input -> treat as auto
+                return None
+
+        AXIS_X_MIN = parse_value(self.xmin_edit.text())
+        AXIS_X_MAX = parse_value(self.xmax_edit.text())
+        AXIS_Y_MIN = parse_value(self.ymin_edit.text())
+        AXIS_Y_MAX = parse_value(self.ymax_edit.text())
+
+        self.update_plot()
+
+    def reset_auto_scaling(self):
+        global AXIS_X_MIN, AXIS_X_MAX, AXIS_Y_MIN, AXIS_Y_MAX
+        AXIS_X_MIN = AXIS_X_MAX = AXIS_Y_MIN = AXIS_Y_MAX = None
+
+        # Clear text fields back to empty (auto)
+        self.xmin_edit.clear()
+        self.xmax_edit.clear()
+        self.ymin_edit.clear()
+        self.ymax_edit.clear()
+
+        # Re-enable auto range on all plots
+        for p in self.plot_widgets:
+            p.enableAutoRange()
+
+        self.update_plot()
 
     # ---------- Serial Polling ----------
 
@@ -410,6 +484,13 @@ class SerialPlotter(QtWidgets.QMainWindow):
             y = [self.convert_temp(v) for v in self.curves_data[key]]
             if len(y) == len(t):
                 curve.setData(t, y)
+
+        # Apply manual axis scaling globally (if configured)
+        for p in self.plot_widgets:
+            if AXIS_X_MIN is not None and AXIS_X_MAX is not None:
+                p.setXRange(AXIS_X_MIN, AXIS_X_MAX)
+            if AXIS_Y_MIN is not None and AXIS_Y_MAX is not None:
+                p.setYRange(AXIS_Y_MIN, AXIS_Y_MAX)
 
     # ---------- Cleanup ----------
 
