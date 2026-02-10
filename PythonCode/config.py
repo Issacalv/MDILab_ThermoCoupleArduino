@@ -2,7 +2,7 @@
 '''
 These MUST match from the Arduino
 '''
-PORT = "COM4"
+PORT = "COM3"
 BAUD = 115200
 
 
