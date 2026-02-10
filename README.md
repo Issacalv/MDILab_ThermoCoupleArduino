@@ -173,6 +173,8 @@ File → Open Folder
 Terminal → New Terminal
 ```
 
+### or
+
 ### Method 2 — Keyboard Shortcut
 (Symbol right above TAB)
 ```
@@ -190,7 +192,7 @@ PS C:\Users\You\MDILab_ThermoCoupleArduino>
 
 ### 1. Create venv
 ```
-python3.13 -m venv venv
+py -3.13 -m venv venv
 ```
 
 ### 2. Activate venv
@@ -207,11 +209,7 @@ You should now see:
 
 ## 📥 Install Dependencies
 
-```
-pip install -r requirements.txt
-```
 
-Or manually:
 ```
 pip install pyqt5 pyqtgraph pyserial
 ```
@@ -243,11 +241,6 @@ READY
 ```
 cd PythonCode
 python test_main.py
-```
-
-or:
-```
-python PythonCode/test_main.py
 ```
 
 ---
