@@ -15,14 +15,14 @@ const uint8_t SENSOR_COUNT = 8;
    TCA9548A channel mapping for each sensor.
 */
 const uint8_t SENSOR_CHANNEL[SENSOR_COUNT] = {
-  0,  // Sensor 0 on channel 0
-  1,  // Sensor 1 on channel 1
-  2,  // Sensor 2 on channel 2
-  3,  // Sensor 3 on channel 3
-  4,  // Sensor 4 on channel 4
-  5,  // Sensor 5 on channel 5
-  6,  // Sensor 6 on channel 6
-  7   // Sensor 7 on channel 7
+  4,  // Sensor 0 on channel 0
+  5,  // Sensor 1 on channel 1
+  6,  // Sensor 2 on channel 2
+  7,  // Sensor 3 on channel 3
+  0,  // Sensor 4 on channel 4
+  1,  // Sensor 5 on channel 5
+  2,  // Sensor 6 on channel 6
+  3   // Sensor 7 on channel 7
 };
 
 /*
